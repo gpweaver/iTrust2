@@ -1,0 +1,307 @@
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head th:include="layout :: head(title=~{::title},links=~{})">
+<title>BSM CPT Codes</title>
+<link rel="stylesheet"
+	href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<script
+	src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.4/angular.min.js"></script>
+</head>
+
+<body th:include="layout :: body" th:with="content=~{::content}">
+	<div th:fragment="content">
+
+
+		<script th:inline="javascript">
+      /* Otherwise Thymeleaf tries to parse Javascript as XML and breaks itself sometimes.  Sigh */
+      /*<![CDATA[*/
+      var app = angular.module("BSMCPTCodesApp", []);
+      app.controller('BSMCPTCodesCtrl', function ($scope, $http) {
+    	  
+			$scope.expandAdd = function() {
+				if ($scope.expandButtonAdd === "expand_more") {
+					$scope.expandButtonAdd = "expand_less";
+					$scope.expandStatusAdd = true;
+				} else {
+					$scope.expandButtonAdd = "expand_more";
+					$scope.expandStatusAdd = false;
+				}
+			}
+			
+			$scope.expandExisting = function() {
+				if ($scope.expandButtonExisting === "expand_more") {
+					$scope.expandButtonExisting = "expand_less";
+					$scope.expandStatusExisting = true;
+				} else {
+					$scope.expandButtonExisting = "expand_more";
+					$scope.expandStatusExisting = false;
+				}
+			}
+    	  
+    	var checkValidCPTCode = (cptCode) => {
+    		var err = [];
+    		if (cptCode.code.length != 5)
+    			err.push("The CPT Code must be exactly 5 numerical digits.");
+    		/*else if (cptCode.maxDuration < 0)
+    			err.push("Maximum Duration must be a positive integer.");
+    		else if (cptCode.minDuration < 0)
+    			err.push("Minimum Duration must be a positive integer.");
+            else if ( cptCode.maxDuration < cptCode.minDuration )
+                err.push("Maximum Duration must be greater than or equal to Minimum Duration.");*/
+    		else if (cptCode.cost <= 0)
+    			err.push("The cost must be $0.01 or more.");
+    		else if (cptCode.cost > 999999999)
+    			err.push("The cost exceeds the maximum of $999,999,999");
+    		else if (cptCode.description.length > 500)
+    			err.push("The description cannot be longer than 500 characters.");
+    		return err.join(". ");
+    	}
+
+        $scope.cptCodes = [];
+        $scope.nocptCodes = false;
+
+		$scope.generateCodes = function() {
+			$http.post("/iTrust2/api/v1/generateCodes").then(function(success) {
+
+			}, function(failure) {
+
+			});
+		};
+
+		$scope.generateCodes();
+		
+        $scope.loadTable = function () {
+          $http.get("/iTrust2/api/v1/cptcodes").then(
+            function (response) {
+              $scope.cptCodes = response.data;
+              $scope.cptCodes.length ? $scope.nocptCodes = false : $scope.nocptCodes = true;
+
+              $scope.message = "";
+            }, function (rejection) {
+              $scope.cptCodes = [];
+              $scope.message = "Could not display cptCodes";
+              $scope.nocptCodes = true;
+            });
+        }
+
+        $scope.checkboxClick = () => {
+        	console.log($scope.cptCode.hasDuration);
+        }
+        
+        $scope.addcptCode = function () {
+          var err = checkValidCPTCode($scope.cptCode);
+          if (err) {
+            $scope.errorAdding = err;
+          } else {
+            $http.post("/iTrust2/api/v1/cptcodes", $scope.cptCode).then(
+              function (response) {
+                $scope.loadTable();
+                $scope.cptCode.code = "";
+                $scope.cptCode.hasDuration = false;
+                $scope.cptCode.cost = 0;
+                $scope.cptCode.description = "";
+                $scope.errorAdding = "";
+              }, function (rejection) {
+                $scope.errorAdding = "Could not add cptCode";
+              });
+          }
+
+        }
+
+        $scope.deletecptCode = function (cptCode) {
+          $http.delete('/iTrust2/api/v1/cptcodes/' + cptCode.code).then(
+            function (response) {
+              $scope.loadTable();
+              $scope.message = "";
+            }, function (rejection) {
+              $scope.message = "Could not remove cptCode";
+            })
+        }
+
+        // gets the template to ng-include for a table row / item
+        $scope.selectedcptCode = {};
+
+        $scope.getTemplate = function (cptCode) {
+          if (cptCode.id === $scope.selectedcptCode.id) return 'edit';
+          else return 'view';
+        };
+
+        $scope.editcptCode = function (cptCode) {
+          $scope.selectedcptCode = angular.copy(cptCode);
+        };
+        
+        $scope.savecptCode = function () {
+       	  var err = checkValidCPTCode($scope.selectedcptCode);
+          if (err) {
+            $scope.errorAdding = err;
+          } else {
+            $http.put("/iTrust2/api/v1/cptcodes", $scope.selectedcptCode).then(
+              function (response) {
+                $scope.loadTable();
+                $scope.resetSelected();         
+              }, function (rejection) {
+                $scope.errorAdding = "Failed to edit cptCode";
+              });
+          }
+        };
+
+        $scope.resetSelected = function () {
+          $scope.selectedcptCode = {};
+        };
+
+        $scope.expandButtonExisting = "expand_less";
+		$scope.expandStatusExisting = true;
+		$scope.expandButtonAdd = "expand_more";
+		$scope.expandStatusAdd = false;
+		
+        // load table initially
+        $scope.loadTable();
+      });
+			/*]]>*/
+    </script>
+
+		<div ng-app="BSMCPTCodesApp" ng-controller="BSMCPTCodesCtrl">
+			<div class="container">
+				<div class="row" style="padding-top: 15px;">
+					<div class="col-md-12">
+						<div class="panel panel-primary">
+							<div class="panel-heading">
+								<h3>BSM CPT Codes</h3>
+							</div>
+							<div class="panel-body">
+								<div class="panel panel-default">
+									<div class="panel-heading ">
+										Existing CPT Codes
+										<button class="btn btn-xs" style="font-size: 0.1rem" ng-click="expandExisting()"><i class="material-icons">{{expandButtonExisting}}</i></button>
+									</div>
+									<div class="panel-body" ng-show="expandStatusExisting" style="max-height: 400px; overflow:scroll;">
+										<p ng-show="nocptCodes">There are no CPT Codes in the system.</p>
+										<table class="table table-bordered" ng-show="!nocptCodes">
+											<thead>
+												<tr>
+													<th>Code</th>
+													<th>Cost</th>
+													<th>Description</th>
+													<th>Has Duration?</th>
+													<th>Action</th>
+												</tr>
+											</thead>
+											<tbody>
+												<tr name="cptCodeTableRow"
+													ng-repeat="v in cptCodes | orderBy: 'code'"
+													ng-include="getTemplate(v)" cptCodeId={{v.id}}>
+												</tr>
+											</tbody>
+										</table>
+									</div>
+								</div>
+							
+								<!-- table in view mode -->
+								<script type="text/ng-template" id="view">
+                 					<td name="codeCell">{{v.code}}</td>
+                  					<td name="costCell">{{v.cost}}</td>
+									<td name="descriptionCell">{{v.description}}</td>
+                                    <td name="hasDurationCell">{{v.hasDuration === true ? "Yes" : "No"}}</td>
+                 					<td>
+                    					<div class="row text-center">
+                      						<div class="col-md-3">
+                        						<input type="button" value="Edit" class="btn btn-primary" name="editcptCode" ng-click="editcptCode(v)" />                         
+                      						</div>
+                      						<div class="col-md-3">
+                          						<input type="button" value="Delete" class="btn btn-danger" name="deletecptCode" ng-click="deletecptCode(v)" />                          
+                     						</div>
+                    					</div>
+                  					</td>
+               					 </script>
+
+								<!-- table in edit mode -->
+								<script type="text/ng-template" id="edit">
+                  					<td name="editCodeCell">
+                    					<input type="text" class="form-control" ng-model="selectedcptCode.code" />
+                  					</td>
+                  					<td name="editCostCell">
+                    					<input type="number" step="0.01" class="form-control" ng-model="selectedcptCode.cost" />
+                  					</td>
+                  					<td name="editDescriptionCell">
+                    					<input type="text" class="form-control" ng-model="selectedcptCode.description" />
+                  					</td>
+                                    <td name="editHasDurationCell">
+										<div class="form-check">
+											<input class="form-check-input" type="checkbox" ng-model="selectedcptCode.hasDuration" id="hasDurationCheckbox">
+											<label style="font-size: 14px;" class="form-check-label" for="hasDurationCheckbox">Has Duration?</label>
+										</div>                  					
+									</td>
+                  					<td>
+                    					<div class="row text-center">
+                      						<div class="col-md-3">
+                          						<input type="button"  value="Save" class="btn btn-success" name="savecptCode" ng-click="savecptCode()" />                          
+                      						</div>
+                      						<div class="col-md-3" style="margin-left: 5px">
+                          						<input type="button" value="Cancel" class="btn btn-danger" name="cancelEdit" ng-click="resetSelected()" />                            
+                      						</div>
+                    					</div>
+                  					</td>
+               					 </script>
+
+								<br>
+								<div class="row">
+									<div class="col-md-12">
+										<div class="panel panel-default">
+											<div class="panel-heading ">
+												Add a CPT Code
+												<button class="btn btn-xs" style="font-size: 0.1rem" ng-click="expandAdd()"><i class="material-icons">{{expandButtonAdd}}</i></button>
+											</div>
+											<div class="panel-body" ng-show="expandStatusAdd">
+												<form class="form-horizontal" role="form" name="addcptCodeForm"
+													ng-submit="addcptCode(addcptCodeForm.$valid)">
+													<div class="row">
+														<div class="col-md-4">
+															<label>Code</label> <input type="text"
+																class="form-control" name="code" ng-model="cptCode.code"
+																required placeholder="Enter a 5-digit code" />
+														</div>
+														<div class="col-md-4">
+															<label>Cost</label>
+															<input class="form-control" type="number" step="0.01"
+																name="cost" ng-model="cptCode.cost" required
+																placeholder="0.00">
+														</div>
+														<div class="col-md-4">
+															<label>Description</label> <input type="text"
+																class="form-control" name="description" ng-model="cptCode.description" required 
+																placeholder="Enter a description"/>
+														</div>
+														<div class="col-md-4" style="padding-top: 10px; padding-bottom: 10px;">
+															<div class="form-check">
+																<input class="form-check-input" type="checkbox" name="hasDuration" ng-model="cptCode.hasDuration" id="hasDurationCheckbox">
+																<label class="form-check-label" for="hasDurationCheckbox">Has Duration?</label>
+															</div>
+														</div>
+													</div>
+													<div class="row" style="padding-top: 10px;">
+														<div class="col-md-12">
+															<button type="submit" class="btn btn-success"
+																name="submit">Submit</button>
+														</div>
+													</div>
+												</form>
+												<div>
+													<p style="color: red" ng-model="errorAdding" id="errP">{{errorAdding}}</p>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</body>
+
+</html>
+
+<!-- STILL here??? -->

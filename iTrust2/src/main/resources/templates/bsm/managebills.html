@@ -1,0 +1,326 @@
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head th:include="layout :: head(title=~{::title},links=~{::script})">
+<title>BSM CPT Codes</title>
+<link rel="stylesheet"
+	href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<script
+	src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.4/angular.min.js"></script>
+<script th:src="@{/js/dateTimeService.js}"
+        src="../js/dateTimeService.js"></script>
+</head>
+
+<body th:include="layout :: body" th:with="content=~{::content}">
+	<div th:fragment="content">
+		<script th:inline="javascript">
+      /* Otherwise Thymeleaf tries to parse Javascript as XML and breaks itself sometimes.  Sigh */
+      /*<![CDATA[*/
+      var app = angular.module("BSMViewBillsApp", ['dateTimeServices']);
+      app.controller('BSMBillsCtrl', function ($scope, $http, dateTimeService) {
+    	  
+		$scope.bills = [];
+		$scope.patients = [];
+		$scope.noBills = false;
+
+		$scope.loadTable = function() {
+			$http.get("/iTrust2/api/v1/bills").then(
+				function (response) {
+					if ( $scope.selectedPatient == null ) {
+						$scope.bills = response.data;
+					} else {
+						$scope.bills = [];
+						for ( var i = 0; i < response.data.length; i++ )
+							if ( response.data[i].officeVisit.patient.username == $scope.selectedPatient.username )
+								$scope.bills.push(response.data[i]);
+					}
+					$scope.bills.length ? $scope.noBills = false : $scope.noBills = true;
+
+					$scope.message = "";
+					$scope.displayBill = false;
+					$scope.displayPayBill = false;
+				}, function (rejection) {
+					$scope.bills = [];
+					$scope.message = "Could not display Bills";
+					$scope.noBills = true;
+				});
+			};
+
+		/*Getting a list of patients*/
+		$http.get("/iTrust2/api/v1/patients").then(
+					function (response) {
+						$scope.patients = response.data;
+					}, function (rejection) {
+						$scope.message = "Could not display Bills for patients";
+					});
+							
+		$scope.patientSelect = function (patient) {
+			$scope.selectedPatient = patient;
+			$scope.loadTable();
+        }
+        
+        // Selecting a bill from a table via radio button.
+        $scope.bill = null;
+        $scope.selectBill = function (bill) {
+        	// Hide previous panels.
+        	$scope.displayBill = false;
+        	$scope.displayPayBill = false;
+        	
+        	$scope.bill = bill;
+        }
+        
+        $scope.viewBill = function() {
+        	$scope.displayBill = true;
+        	$scope.displayPayBill = false;
+        	
+        };
+        
+        $scope.payBill = function() {
+        	$scope.displayBill = false;
+        	$scope.displayPayBill = true;
+        }
+        
+        $scope.getPaymentTotal = function() {
+        	var total = 0.0;
+        	for (var i = 0; i < $scope.bill.payments.length; i++) {
+        		total += $scope.bill.payments[i].amount;
+        	}
+        	return total;
+        }
+        
+    	$scope.paymentMethods = [
+    	    "CASH",
+    	    "CHECK" ,
+    	    "CREDITCARD",
+    	    "INSURANCE",
+    	];
+        
+        $scope.makePayment = function() {
+        	// Validate date and time
+            var date = new Date($scope.paymentInputDate);
+            if (!dateTimeService.isValidDate($scope.paymentInputDate)) {
+                alert("Please input a valid date");
+            }
+
+            const time = new Date($scope.paymentInputTime);
+            if (!dateTimeService.isValidDate(time)) {
+                alert("Please input a valid time");
+            }
+
+            date.setHours(time.getHours());
+            date.setMinutes(time.getMinutes());
+            
+            // Check valid date and time combination
+            if (!dateTimeService.isValidDate(date)) {
+                alert("Please input a valid date and time");
+            }
+            $scope.payment.date = date.toISOString();
+            
+            if ( $scope.payment.amount >= ($scope.bill.total - $scope.getPaymentTotal())) {
+            	$scope.payment.amount = $scope.bill.total - $scope.getPaymentTotal();
+            }
+            $scope.payment.id = $scope.bill.id;
+            
+            // $scope.payment
+        	$http.post( "/iTrust2/api/v1/payments", $scope.payment).then(
+					function(success) {
+						alert("Payment Succesfully posted.");
+						$scope.loadTable();
+						$scope.bill = null;
+					}, function(rejection){
+						alert("Failed to post payment: " + rejection.data);
+					});
+        	
+        }
+
+		// load table initially
+		$scope.loadTable();
+      });
+			/*]]>*/
+    </script>
+
+		<div ng-app="BSMViewBillsApp" ng-controller="BSMBillsCtrl">
+			<div class="container">
+				<div class="row" style="padding-top: 15px;">
+					<div class="col-md-12">
+						<div class="panel panel-primary">
+							<div class="panel-heading">
+								<h3>BSM View Bills</h3>
+							</div>
+							<div class="container-fluid">
+								<label>Please select a patient to view their bills:</label>
+									<div class="dropdown">
+										<a class="dropdown-toggle"
+										data-toggle="dropdown" href="#">Patient<span class="caret"></span></a>
+										<ul class="dropdown-menu">
+											<ul 
+												style="max-height: 15%; overflow: auto; list-style: none;">
+												<li ng-repeat="patient in patients">
+													<label> 
+														<input 
+															type="radio"
+															ng-model="$parent.selectedPatientName" 
+															name="name"
+															value="{{patient.username}}" 
+															ng-change='patientSelect(patient)'
+															id="{{patient.username}}" 
+														/>
+														{{patient.username}} </br>
+												</label>
+												</li>
+											</ul>
+										</div>
+								</div>
+							</div>
+							<div class="panel-body">
+								<p ng-show="noBills">There are no relevant bills in the system.</p>
+								<table class="table table-bordered" ng-show="!noBills">
+									<thead>
+										<tr>
+											<th> </th>
+											<th>Patient name</th>
+											<th>Date</th>
+											<th>Bill Amount</th>
+											<th>Payment Status</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr name="billTableRow" ng-repeat="v in bills | orderBy: 'v.officeVisit.date'" billId={{v.id}}>
+											<td name="selectCell"><input type="radio" name="selectRow" ng-model="$parent.selectedBill" ng-value="v.id" ng-click="selectBill(v)"></td>
+											<td name="nameCell">{{v.officeVisit.patient.username}}</td>
+											<td name="dateCell">{{v.officeVisit.date | date: "MM/dd/yyyy"}}</td>
+											<td name="amountCell">{{v.total}}</td>
+											<td name="statusCell">{{v.status}}</td>
+									</tbody>
+								</table>
+							</div>
+							<div class="panel-footer text-right">
+								<button class="btn btn-lg" ng-click="viewBill()"
+									name="viewBill" ng-show="bill">View Bill</button>
+								<button class="btn btn-primary btn-lg" ng-click="payBill()"
+									name="showBillPayment" ng-disabled="!bill">Pay Bill</button>
+							</div>
+							
+						</div>
+						
+						<!-- Display the information about the bill -->
+						<div class='panel panel-default' ng-if="bill && (displayBill || displayPayBill)">
+							
+							<!-- Show heading based on if bill viewing or paying is displayed. -->
+							<div class="panel panel-heading" ng-show="displayBill">
+								<h3>View Bill</h3>
+							</div>		
+							
+							<div class="panel panel-heading" ng-show="displayPayBill">
+								<h3>Pay Bill</h3>
+							</div>
+							
+							<!-- This will show up on both screens; displays patient name, date, attending hcp, bill status, and itemized list of codes -->
+							<div class='panel-body'>
+								<div class="row">
+									<div class="form-group col-md-2">
+										<label for="time">Patient Name:</label> <input id="name" type="text"
+											name="name" class="form-control" value="{{bill.officeVisit.patient.username}}" disabled/>
+									</div>
+								
+									<div class="form-group col-md-2">
+										<label for="date">Date:</label> <input id="date" type="text"
+											class="form-control" value="{{bill.officeVisit.date  | date :
+													'MM/dd/yyyy'}}" name="date" disabled />
+									</div>
+		
+									
+									<div class="form-group col-md-2">
+										<label>Provider:</label> <input type="text"
+											name="provider" class="form-control" value="{{bill.officeVisit.hcp.username}}" disabled/>
+									</div>
+									
+									<div class="form-group col-md-2">
+										<label>Bill Status: </label> <input type="text"
+											name="provider" class="form-control" value="{{bill.status}}" disabled/>
+									</div>
+									
+								</div>
+								
+								<table class="table table-bordered">
+									<thead>
+										<tr>
+											<th>Code</th>
+											<th>Description</th>
+											<th>Cost</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr name="codeTableRow" ng-repeat="c in bill.officeVisit.cptCodes | orderBy: 'c.code'" codeId={{c.id}}>
+										<td name="codeCell">{{c.code}}</td>
+										<td name="descCell">{{c.description}}</td>
+										<td name="priceCell">{{c.cost}}</td>
+									</tbody>
+								</table>
+								
+								<table class="table table-bordered">
+									<tbody>
+										<tr>
+											<td><b>Total</b></td>
+											<td><b>{{bill.total}}</b></td>
+										</tr>
+										<tr>
+											<td>Payments</td>
+											<td>{{ getPaymentTotal() }}</td>
+										</tr>
+										<tr>
+											<td><b>Amount Due</b></td>
+											<td><b>{{bill.total - getPaymentTotal()}}</b></td>
+										</tr>
+										
+									</tbody>
+								</table>
+							
+								<div class="panel-body" ng-show="displayPayBill">
+									<p ng-show="!bill.payments.length">There are no payments for this bill.</p>
+									<table class="table table-bordered" ng-show="bill.payments.length">
+										<thead>
+											<tr>
+												<th>Method</th>
+												<th>Date</th>
+												<th>Amount</th>
+											</tr>
+										</thead>
+										<tbody>
+											<tr name="paymentTableRow" ng-repeat="p in bill.payments | orderBy: 'p.date'" paymentId={{p.id}}>
+												<td name="methodCell">{{p.method}}</td>
+												<td name="dateCell">{{p.date | date: "MM/dd/yyyy"}}</td>
+												<td name="amountCell">{{p.amount}}</td>
+										</tbody>
+									</table>
+								</div>
+								
+								<div class="panel-footer text-right" ng-show="displayPayBill">
+									<label for="date">Date:</label> <input id="date" type="date"
+											class="form-control" ng-model="$parent.paymentInputDate" name="date"
+										    required="true" />
+									<label for="time">Time:</label> <input id="time" type="time"
+											name="time" class="form-control" ng-model="$parent.paymentInputTime"
+											required="true" />
+									<select ng-options="paymentMethod as paymentMethod for paymentMethod in paymentMethods" ng-model="$parent.payment.method"></select>
+									<input type="number" ng-model="$parent.payment.amount" name="amount" placeholder="Enter Amount" required="true" />
+									
+									<button class="btn btn-primary btn-lg" ng-click="makePayment()"
+										name="makePayment">Make Payment</button>
+								</div>
+							
+							</div>
+							
+							
+							
+						</div>			
+						
+						</div>
+						
+					</div>
+				</div>
+			</div>
+		</div>
+</body>
+
+</html>
